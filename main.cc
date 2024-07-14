@@ -1,9 +1,20 @@
 #include <libuvc/libuvc.h>
 #include <opencv2/core.hpp>
+#include <opencv2/core/types.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/stitching.hpp>
+#include <opencv2/features2d.hpp>
+#include <iostream>
 #include <stdio.h>
 #include <unistd.h>
+#include <string>
+#include <vector>
  
+static const std::string WINDOW_NAME = "Hello Trackit!";
+
+static cv::Ptr<cv::FeatureDetector> orbFinder;
+
 /* This callback function runs once per frame. Use it to perform any
  * quick processing you need, or have it put the frame into your application's
  * input queue. If this function takes too long, you'll start losing frames. */
@@ -11,11 +22,6 @@ void cb(uvc_frame_t *frame, void *ptr) {
   uvc_frame_t *bgr;
   uvc_error_t ret;
   enum uvc_frame_format *frame_format = (enum uvc_frame_format *)ptr;
-  FILE *fp;
-  static int jpeg_count = 0;
-  static const char *H264_FILE = "iOSDevLog.h264";
-  static const char *MJPEG_FILE = ".jpeg";
-  char filename[16];
  
   /* We'll convert the image from YUV/JPEG to BGR, so allocate space */
   bgr = uvc_allocate_frame(frame->width * frame->height * 3);
@@ -23,34 +29,21 @@ void cb(uvc_frame_t *frame, void *ptr) {
     printf("unable to allocate bgr frame!\n");
     return;
   }
- 
-  printf("callback! frame_format = %d, width = %d, height = %d, length = %lu, ptr = %p\n",
-    frame->frame_format, frame->width, frame->height, frame->data_bytes, ptr);
- 
-  switch (frame->frame_format) {
-  case UVC_COLOR_FORMAT_MJPEG:
-     sprintf(filename, "%d%s", jpeg_count++, MJPEG_FILE);
-     fp = fopen(filename, "w");
-     fwrite(frame->data, 1, frame->data_bytes, fp);
-     fclose(fp);
-    break;
-  case UVC_COLOR_FORMAT_YUYV:
-    /* Do the BGR conversion */
-    ret = uvc_any2bgr(frame, bgr);
-    if (ret) {
-      uvc_perror(ret, "uvc_any2bgr");
-      uvc_free_frame(bgr);
-      return;
-    }
-    break;
-  default:
-    break;
-  }
- 
-  if (frame->sequence % 30 == 0) {
-    printf(" * got image %u\n",  frame->sequence);
-  }
- 
+  
+  uint8_t* typedBuf = (uint8_t*)frame->data;
+  std::vector<uint8_t> imgVec(typedBuf, typedBuf + frame->data_bytes);
+  cv::Mat cvImg = cv::imdecode(imgVec, cv::ImreadModes::IMREAD_UNCHANGED);
+  
+  cv::detail::ImageFeatures features;
+  std::vector<cv::KeyPoint> keypoints;
+  cv::Mat _;
+  orbFinder->detectAndCompute(cvImg, _, keypoints, _);
+  std::cout << "Keypoints: " << keypoints.size() << std::endl;
+  std::cout << "Image cols: " << cvImg.cols << std::endl;
+  cv::drawKeypoints(cvImg, keypoints, cvImg, cv::Scalar(0, 255, 0, 255));
+  
+  imshow(WINDOW_NAME, cvImg);
+  cv::waitKey(1);
   /* Call a user function:
    *
    * my_type *my_obj = (*my_type) ptr;
@@ -89,6 +82,10 @@ int main(int argc, char **argv) {
   uvc_device_handle_t *devh;
   uvc_stream_ctrl_t ctrl;
   uvc_error_t res;
+  
+  orbFinder = cv::ORB::create();
+  
+  cv::namedWindow(WINDOW_NAME);
  
   /* Initialize a UVC service context. Libuvc will set up its own libusb
    * context. Replace NULL with a libusb_context pointer to run libuvc
