@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <string>
 #include <vector>
+
+#include "imu.h"
  
 static const std::string WINDOW_NAME = "Hello Trackit!";
 
@@ -21,8 +23,8 @@ static cv::Ptr<cv::FeatureDetector> orbFinder;
 void cb(uvc_frame_t *frame, void *ptr) {
   uvc_frame_t *bgr;
   uvc_error_t ret;
-  enum uvc_frame_format *frame_format = (enum uvc_frame_format *)ptr;
- 
+  // enum uvc_frame_format *frame_format = (enum uvc_frame_format *)ptr;
+  reinterpret_cast<IMU*>(ptr)->GetAgmt();
   /* We'll convert the image from YUV/JPEG to BGR, so allocate space */
   bgr = uvc_allocate_frame(frame->width * frame->height * 3);
   if (!bgr) {
@@ -38,8 +40,6 @@ void cb(uvc_frame_t *frame, void *ptr) {
   std::vector<cv::KeyPoint> keypoints;
   cv::Mat _;
   orbFinder->detectAndCompute(cvImg, _, keypoints, _);
-  std::cout << "Keypoints: " << keypoints.size() << std::endl;
-  std::cout << "Image cols: " << cvImg.cols << std::endl;
   cv::drawKeypoints(cvImg, keypoints, cvImg, cv::Scalar(0, 255, 0, 255));
   
   imshow(WINDOW_NAME, cvImg);
@@ -77,6 +77,8 @@ void cb(uvc_frame_t *frame, void *ptr) {
 }
  
 int main(int argc, char **argv) {
+  IMU imu;
+  imu.Begin();
   uvc_context_t *ctx;
   uvc_device_t *dev;
   uvc_device_handle_t *devh;
@@ -142,9 +144,7 @@ int main(int argc, char **argv) {
         height = frame_desc->wHeight;
         fps = 10000000 / frame_desc->dwDefaultFrameInterval;
       }
- 
-      printf("\nFirst format: (%4s) %dx%d %dfps\n", format_desc->fourccFormat, width, height, fps);
- 
+  
       /* Try to negotiate first stream profile */
       res = uvc_get_stream_ctrl_format_size(
           devh, &ctrl, /* result stored in ctrl */
@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
         /* Start the video stream. The library will call user function cb:
          *   cb(frame, (void *) 12345)
          */
-        res = uvc_start_streaming(devh, &ctrl, cb, (void *) 12345, 0);
+        res = uvc_start_streaming(devh, &ctrl, cb, (void *) &imu, 0);
  
         if (res < 0) {
           uvc_perror(res, "start_streaming"); /* unable to start stream */
@@ -210,6 +210,5 @@ int main(int argc, char **argv) {
    * and it closes the libusb context if one was not provided. */
   uvc_exit(ctx);
   puts("UVC exited");
- 
   return 0;
 }
