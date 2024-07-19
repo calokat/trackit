@@ -33,7 +33,7 @@ bool I2C::WriteByte(int address, unsigned char commandCode, unsigned short value
 }
 
 bool I2C::ReadBlock(int address, unsigned char commandCode, int numBytes, uint8_t* values) {
-	int numBytesRead = i2c_smbus_read_block_data(file, AGB0_REG_ACCEL_XOUT_H, values);
+	int numBytesRead = i2c_smbus_read_i2c_block_data(file, AGB0_REG_ACCEL_XOUT_H, numBytes, values);
 	std::cout << "Number of bytes read: " << numBytesRead << std::endl;
 	return true;
 }
