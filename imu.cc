@@ -18,7 +18,6 @@ bool IMU::Reset() {
 	SetBank(0);
 	int reg = 42;
 	int result = driver.ReadByte(address, AGB0_REG_PWR_MGMT_1, reg);
-	std::cout << "OOOOOOOOOH " << reg << std::endl;
 	if (!result) {
 		std::cout << "Failed to read power management bit " << reg << std::endl;
 		exit(1);
@@ -203,10 +202,8 @@ bool IMU::Begin() {
 	int idReg;
 	bool idRes = driver.ReadByte(address, AGB0_REG_WHO_AM_I, idReg);
 	if (!idRes) {
-		printf("Who dis");
 	}
 	if (idReg != 0xEA) {
-		printf("Memento");
 		exit(1);
 	}
 	Reset();
@@ -328,32 +325,24 @@ int IMU::ICM_20948_i2c_master_slv4_txn(int addr, int reg, int data, bool rw, boo
 	while (!slave4Done) {
 		SetBank(0);
 		int res = driver.ReadByte(address, AGB0_REG_I2C_MST_STATUS, statusReg);
-		if (res < 0) {
-			std::cout << "What's wrong???? " << res << std::endl; 
-		}
 		if ((statusReg & (1 << 6)) > 0) {
 			slave4Done = true;
-			std::cout << "Why tho\n";
 		}
 		if (count > MAX_CYCLES) {
-			std::cout << "Frick\n";
 			slave4Done = true;
 		}
 		count += 1;
 	}
 	
 	if (statusReg & (1 << 4)) {
-		std::cout << "Foo\n";
 		txnFailed = true;
 	}
 	
 	if (count > MAX_CYCLES) {
-		std::cout << "Bar\n";
 		txnFailed = true;
 	}
 	
 	if (txnFailed) {
-		std::cout << "Fuckity fuck\n";
 		return -1;
 	}
 	
@@ -388,7 +377,6 @@ int16_t IMU::ToSignedInt(uint16_t i) {
 
 void IMU::GetAgmt() {
 	if (!IsDataReady()) {
-		std::cout << "F U 2\n";
 		return;
 	}
 	uint8_t buff[23];
@@ -398,10 +386,15 @@ void IMU::GetAgmt() {
 	ayRaw = ((buff[2] << 8) | (buff[3] & 0xFF));
 	azRaw = ((buff[4] << 8) | (buff[5] & 0xFF));
 	
-	std::cout << "Acceleration:\n";
-	std::cout << "X: " << ToSignedInt(axRaw) << std::endl;
-	std::cout << "Y: " << ToSignedInt(ayRaw) << std::endl;
-	std::cout << "Z: " << ToSignedInt(azRaw) << std::endl;
+	gxRaw = ((buff[6] << 8) | (buff[7] & 0xFF));
+	gyRaw = ((buff[8] << 8) | (buff[9] & 0xFF));
+	gzRaw = ((buff[10] << 8) | (buff[11] & 0xFF));
+	
+	std::cout << "Acceleration: ";
+	std::cout << "X: " << axRaw << " Y: " << ayRaw << " Z: " << azRaw << std::endl;
+
+	std::cout << "Gyro: ";
+	std::cout << "X: " << gxRaw << " Y: " << gyRaw << " Z: " << gzRaw << std::endl;
 }
 
 bool IMU::I2CMasterConfigureSlave(int slave, int addr, int reg, int len, bool rw, bool enable, bool data_only, int grp, int swap) {
@@ -470,7 +463,6 @@ bool IMU::StartupMagnetometer() {
 			tries += 1;
 		}
 		if (tries == maxTries) {
-			std::cout << "Shittity shit\n";
 			return false;
 		}
 		int mag_reg_ctrl2 = 0x00;
