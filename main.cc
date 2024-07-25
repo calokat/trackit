@@ -5,6 +5,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/stitching.hpp>
 #include <opencv2/features2d.hpp>
+#include <algorithm>
 #include <iostream>
 #include <stdio.h>
 #include <unistd.h>
@@ -16,7 +17,8 @@
 static const std::string WINDOW_NAME = "Hello Trackit!";
 
 static cv::Ptr<cv::FeatureDetector> orbFinder;
-
+static cv::Ptr<cv::DescriptorMatcher> bfMatcher;
+static cv::Mat prevDescriptors;
 /* This callback function runs once per frame. Use it to perform any
  * quick processing you need, or have it put the frame into your application's
  * input queue. If this function takes too long, you'll start losing frames. */
@@ -24,7 +26,7 @@ void cb(uvc_frame_t *frame, void *ptr) {
   uvc_frame_t *bgr;
   uvc_error_t ret;
   // enum uvc_frame_format *frame_format = (enum uvc_frame_format *)ptr;
-  reinterpret_cast<IMU*>(ptr)->GetAgmt();
+  // reinterpret_cast<IMU*>(ptr)->GetAgmt();
   /* We'll convert the image from YUV/JPEG to BGR, so allocate space */
   bgr = uvc_allocate_frame(frame->width * frame->height * 3);
   if (!bgr) {
@@ -35,45 +37,26 @@ void cb(uvc_frame_t *frame, void *ptr) {
   uint8_t* typedBuf = (uint8_t*)frame->data;
   std::vector<uint8_t> imgVec(typedBuf, typedBuf + frame->data_bytes);
   cv::Mat cvImg = cv::imdecode(imgVec, cv::ImreadModes::IMREAD_UNCHANGED);
-  
+  uvc_free_frame(bgr);
+
   cv::detail::ImageFeatures features;
   std::vector<cv::KeyPoint> keypoints;
   cv::Mat _;
-  orbFinder->detectAndCompute(cvImg, _, keypoints, _);
-  cv::drawKeypoints(cvImg, keypoints, cvImg, cv::Scalar(0, 255, 0, 255));
+  cv::Mat descriptors;
+  orbFinder->detectAndCompute(cvImg, _, keypoints, descriptors);
+  //cv::drawKeypoints(cvImg, keypoints, cvImg, cv::Scalar(0, 255, 0, 255));
   
-  imshow(WINDOW_NAME, cvImg);
-  cv::waitKey(1);
-  /* Call a user function:
-   *
-   * my_type *my_obj = (*my_type) ptr;
-   * my_user_function(ptr, bgr);
-   * my_other_function(ptr, bgr->data, bgr->width, bgr->height);
-   */
- 
-  /* Call a C++ method:
-   *
-   * my_type *my_obj = (*my_type) ptr;
-   * my_obj->my_func(bgr);
-   */
- 
-  /* Use opencv.highgui to display the image:
-   * 
-   * cvImg = cvCreateImageHeader(
-   *     cvSize(bgr->width, bgr->height),
-   *     IPL_DEPTH_8U,
-   *     3);
-   *
-   * cvSetData(cvImg, bgr->data, bgr->width * 3); 
-   *
-   * cvNamedWindow("Test", CV_WINDOW_AUTOSIZE);
-   * cvShowImage("Test", cvImg);
-   * cvWaitKey(10);
-   *
-   * cvReleaseImageHeader(&cvImg);
-   */
- 
-  uvc_free_frame(bgr);
+  //imshow(WINDOW_NAME, cvImg);
+  std::vector<cv::DMatch> matches;
+  if (!prevDescriptors.empty()) {
+    bfMatcher->match(prevDescriptors, descriptors, matches);
+  }
+  //std::sort(matches.begin(), matches.begin() + 1, [](cv::DMatch m, cv::DMatch n) {
+    //return m.distance < n.distance;
+  //});
+  std::cout << "Matches: " << matches.size() << std::endl;
+  prevDescriptors = descriptors;
+  cv::waitKey(1); 
 }
  
 int main(int argc, char **argv) {
@@ -86,8 +69,9 @@ int main(int argc, char **argv) {
   uvc_error_t res;
   
   orbFinder = cv::ORB::create();
+  bfMatcher = cv::BFMatcher::create();
   
-  cv::namedWindow(WINDOW_NAME);
+  // cv::namedWindow(WINDOW_NAME);
  
   /* Initialize a UVC service context. Libuvc will set up its own libusb
    * context. Replace NULL with a libusb_context pointer to run libuvc
